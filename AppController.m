@@ -469,6 +469,57 @@
 
 	return newRow;
 }
+- (IBAction)preferencePanelAddIgnoreApp:(id)sender {
+    NSOpenPanel* appSelect = [NSOpenPanel openPanel];
+    appSelect.allowedFileTypes = @[@"app"];
+    appSelect.allowsMultipleSelection = false;
+    [appSelect runModal];
+    NSBundle * appBundle = [NSBundle bundleWithURL:appSelect.URL];
+    NSLog(@"Bundle : %@",appBundle.bundleIdentifier);
+    NSImage* icon  = [[NSWorkspace sharedWorkspace] iconForFile:appBundle.bundlePath];
+    NSString *appName = appBundle.infoDictionary[@"CFBundleName"] != nil ? appBundle.infoDictionary[@"CFBundleName"] :appBundle.infoDictionary[@"CFBundleExecutable"];
+    [ignoreListArrayController addObject:[@{@"name":appName,
+                                           @"identifier":appBundle.bundleIdentifier,
+                                            @"path":appBundle.bundlePath,
+                                           @"icon":icon,
+                                           @"wild":@(false)} mutableCopy]];
+}
+
+- (IBAction)tableViewChanged:(id)sender {
+    NSLog(@"TableView Changed %@",sender);
+    NSMutableArray* saveArray = [NSMutableArray arrayWithCapacity:[ignoreListArrayController.arrangedObjects count]];
+    for ( NSDictionary* item in ignoreListArrayController.arrangedObjects) {
+        [saveArray addObject: @{@"name":item[@"name"],
+                                @"identifier":item[@"identifier"],
+                                @"path":item[@"path"],
+                                @"wild":item[@"wild"]}];
+    }
+    [[NSUserDefaults standardUserDefaults] setObject:saveArray forKey:@"ignoreList"];
+    
+}
+
+-(void) loadIgnoreList
+{
+    if (!isIgnoreListLoaded) {
+        isIgnoreListLoaded = YES;
+        NSArray *ignoreList =    [[NSUserDefaults standardUserDefaults]  arrayForKey:@"ignoreList"];
+        for ( NSDictionary* item in ignoreList) {
+            NSImage* icon  = [[NSWorkspace sharedWorkspace] iconForFile:item[@"path"]];
+            [ignoreListArrayController addObject:[@{@"name":item[@"name"],
+                                                    @"identifier":item[@"identifier"],
+                                                    @"path":item[@"path"],
+                                                    @"icon":icon,
+                                                    @"wild":item[@"wild"]} mutableCopy]];
+        }
+    }
+}
+
+- (BOOL)tableView:(NSTableView *)tableView shouldEditTableColumn:(NSTableColumn *)tableColumn row:(NSInteger)row {
+    if ([tableColumn.identifier isEqualToString:@"wild"]) {
+        return YES;
+    }
+    return NO;
+}
 
 -(void)setBinding:(NSString*)binding forKey:(NSString*)keyPath andOrAction:(SEL)action on:(NSControl*)newControl
 {
@@ -554,6 +605,7 @@
 
 -(IBAction) showPreferencePanel:(id)sender
 {
+    [self loadIgnoreList];
     [currentRunningApplication release];
     currentRunningApplication = nil; // So it doesn't get pulled foreground atop the preference panel.
 	if ([prefsPanel respondsToSelector:@selector(setCollectionBehavior:)])
@@ -837,6 +889,27 @@
 	return NO;
 }
 
+-(BOOL)shouldIgnoreApp:(NSString*) bundleId
+{
+    NSLog(@"%s :  %@",__PRETTY_FUNCTION__,bundleId);
+    NSArray* ignoreList = [[NSUserDefaults standardUserDefaults] arrayForKey:@"ignoreList"];
+    BOOL skip = NO;
+    for (NSDictionary* item in ignoreList) {
+        if ([item[@"wild"] boolValue]) {
+            if ([bundleId containsString:item[@"identifier"]]) {
+                skip = YES;
+                break;
+            }
+        } else {
+            if ([bundleId isEqualToString:item[@"identifier"]]) {
+                skip = YES;
+                break;
+            }
+        }        
+    }
+    return skip;
+}
+
 -(void)pollPB:(NSTimer *)timer
 {
     NSString *type = [jcPasteboard availableTypeFromArray:[NSArray arrayWithObject:NSStringPboardType]];
@@ -867,7 +940,7 @@
 				if (largeCopyRisk)
 					[self toggleMenuIconDisabled];
 
-				if ( contents == nil || [self shouldSkip:contents] ) {
+				if ( contents == nil || [self shouldSkip:contents] || [self shouldIgnoreApp:currRunningApp.bundleIdentifier]) {
                    DLog(@"Contents: Empty or skipped");
                } else {
 					if (( [clippingStore jcListCount] == 0 || ! [contents isEqualToString:[clippingStore clippingContentsAtPosition:0]])

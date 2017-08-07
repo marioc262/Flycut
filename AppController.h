@@ -19,12 +19,14 @@
 
 @class SGHotKey;
 
-@interface AppController : NSObject <NSMenuDelegate> {
+@interface AppController : NSObject <NSMenuDelegate,NSTabViewDelegate> {
     BezelWindow					*bezel;
 	SGHotKey					*mainHotKey;
 	IBOutlet SRRecorderControl	*mainRecorder;
 	IBOutlet NSPanel			*prefsPanel;
-	IBOutlet NSBox			  *appearancePanel;
+	IBOutlet NSBox              *appearancePanel;
+    IBOutlet NSArrayController *ignoreListArrayController;
+    BOOL                        isIgnoreListLoaded;
 	int							mainHotkeyModifiers;
 	SRKeyCodeTransformer        *srTransformer;
 	BOOL						isBezelDisplayed;
